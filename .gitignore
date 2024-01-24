@@ -1,0 +1,15 @@
+db/
+incremental_db/
+output_files/
+simulation/
+*.txt
+*.vwf
+*.bak
+.vscode/
+*.qws
+*.rpt
+work/
+*.wlf
+*.vstf
+*.out.sdc
+.qsys_edit/
