@@ -1,5 +1,7 @@
 module top_tb;
 
+  parameter NUMBER_OF_TEST_RUNS            = 100;
+
   parameter BLINK_HALF_PREIOD_MS           = 10;
   parameter BLINK_GREEN_TIME_TICK          = 2;
   parameter RED_YELLOW_MS                  = 5;
@@ -67,8 +69,7 @@ module top_tb;
                    int                       notransition_time;
                    int                       normal_mode_time; } session_t;
 
-  mailbox #( session_t ) input_data     = new();
-  mailbox #( session_t ) generated_data = new();
+  mailbox #( session_t ) generated_sessions = new();
 
   function void put_settings ( input logic [PERIOD_SIZE - 1:0] yellow_period,
                                      logic [PERIOD_SIZE - 1:0] red_period, 
@@ -99,21 +100,29 @@ module top_tb;
 
   endfunction
 
-  function void display_error ( input data_t in,  
-                                input data_t out_l,
-                                input data_t out_r
-                              );
-    $error( "sended data:%b, found left bit:%b, found right bit:%b", in, out_l, out_r );
+  function void display_error ( );
 
   endfunction
 
-  task generate_sessions ( mailbox #( data_t ) generated_data );
+  task settle_sessions ( mailbox #( data_t ) generated_sessions );
 
   endtask
 
-  task send_data ( mailbox #( data_t ) input_data,
-                   mailbox #( data_t ) generated_data
-                 );
+  task generate_sessions ( mailbox #( data_t ) generated_sessions );
+
+    session_t generated_session;
+
+    repeat ( NUMBER_OF_TEST_RUNS )
+      begin
+        generated_session.yellow_period     = $urandom_range( 100, 0 );
+        generated_session.red_period        = $urandom_range( 100, 0 );
+        generated_session.green_period      = $urandom_range( 100, 0 );
+        generated_session.off_time          = $urandom_range( 100, 0 );
+        generated_session.notransition_time = $urandom_range( 100, 0 );
+        generated_session.normal_mode_time  = $urandom_range( 10000, 0 );
+
+        generate_sessions.put( generated_session );
+      end
 
   endtask
 
