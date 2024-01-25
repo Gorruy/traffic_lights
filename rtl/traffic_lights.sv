@@ -2,7 +2,7 @@ module traffic_lights #(
   // This module will collect serial data
   // of data bus size and put it in parallel
   // form with first came bit as MSB
-  parameter BLINK_HALF_PREIOD_MS  = 10,
+  parameter BLINK_HALF_PERIOD_MS  = 10,
   parameter BLINK_GREEN_TIME_TICK = 2,
   parameter RED_YELLOW_MS         = 5
 )(
@@ -19,14 +19,12 @@ module traffic_lights #(
 );
 
   localparam G_Y_TOGGLE_HPERIOD_CLK_CYCLES = BLINK_HALF_PERIOD_MS * 2; 
-  localparam G_BLINK_CLK_CYCLES           = BLINK_GREEN_TIME_TICK * G_Y_TOGGLE_CLK_CYCLES * 2;
-  localparam RED_YELLOW_CLK_CYCLES        = RED_YELLOW_MS * 2;
+  localparam G_BLINK_CLK_CYCLES            = BLINK_GREEN_TIME_TICK * G_Y_TOGGLE_HPERIOD_CLK_CYCLES * 2;
+  localparam RED_YELLOW_CLK_CYCLES         = RED_YELLOW_MS * 2;
 
-  localparam CMD_SIZE                     = 3;
-  localparam CTR_SIZE                     = 16;
-  localparam PERIOD_SIZE                  = 16;
-
-  localparam TOGGLE_MASK                  = 
+  localparam CMD_SIZE                      = 3;
+  localparam CTR_SIZE                      = 16;
+  localparam PERIOD_SIZE                   = 16;
 
   logic [PERIOD_SIZE - 1:0]  yellow_period;
   logic [PERIOD_SIZE - 1:0]  green_period;
@@ -45,7 +43,7 @@ module traffic_lights #(
                              G_S,
                              Y_S,
                              GT_S,
-                             OFF_S} state_t;
+                             OFF_S } state_t;
   
   state_t state, next_state;
 
@@ -71,7 +69,7 @@ module traffic_lights #(
           next_state = current_state;
 
       default:
-        next_state = (state_t)'('x);
+        next_state = state_t'('x);
     endcase
 
     return next_state;
@@ -137,7 +135,7 @@ module traffic_lights #(
       end
 
       default: begin
-        next_state = (state_t)'('x);
+        next_state = state_t'('x);
       end
     endcase
   end
@@ -148,7 +146,7 @@ module traffic_lights #(
         if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(3) )
           green_period <= cmd_data_i;
       else if ( green_period == '0 )
-        green_period <= (PERIOD_SIZE)'(20);
+        green_period <= (PERIOD_SIZE)'(G_BLINK_CLK_CYCLES);
     end
 
   always_ff @( posedge clk_i )
@@ -157,7 +155,7 @@ module traffic_lights #(
         if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(4) )
           red_period <= cmd_data_i;
       else if ( red_period == '0 )
-        red_period <= (PERIOD_SIZE)'(20);
+        red_period <= (PERIOD_SIZE)'(RED_YELLOW_CLK_CYCLES);
     end
 
   always_ff @( posedge clk_i )
@@ -166,13 +164,13 @@ module traffic_lights #(
         if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(5) )
           yellow_period <= cmd_data_i;
       else if ( yellow_period == '0 )
-        yellow_period <= (PERIOD_SIZE)'(20);
+        yellow_period <= (PERIOD_SIZE)'(RED_YELLOW_CLK_CYCLES);
     end
 
   always_ff @( posedge clk_i )
     begin
       if ( srst_i )
-        counter <= '0
+        counter <= '0;
       else 
         begin
           if ( counter == counter_max || 
@@ -196,14 +194,14 @@ module traffic_lights #(
     begin
       if ( state == GT_S && 
            toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
-        green_toggle = ~green_toggle
+        green_toggle = ~green_toggle;
     end
 
   always_ff @( posedge clk_i )
     begin
       if ( state == NOTRANSITION_S && 
            toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
-        yellow_toggle = ~yellow_toggle
+        yellow_toggle = ~yellow_toggle;
     end
 
   always_comb
@@ -220,7 +218,7 @@ module traffic_lights #(
 
         RY_S: begin
           counter_max = RED_YELLOW_CLK_CYCLES;
-          { red_o, yellow_o, } = { 1'b1, 1'b1 };
+          { red_o, yellow_o } = { 1'b1, 1'b1 };
         end
 
         G_S: begin
