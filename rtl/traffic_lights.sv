@@ -25,6 +25,7 @@ module traffic_lights #(
   localparam CMD_SIZE                      = 3;
   localparam CTR_SIZE                      = 16;
   localparam PERIOD_SIZE                   = 16;
+  localparam DEFAULT_PERIOD                = 10;
 
   logic [PERIOD_SIZE - 1:0]  yellow_period;
   logic [PERIOD_SIZE - 1:0]  green_period;
@@ -37,13 +38,15 @@ module traffic_lights #(
   logic                      yellow_toggle;
   logic                      green_toggle;      
 
-  typedef enum logic [3:0] { NOTRANSITION_S,
-                             R_S,
-                             RY_S,
-                             G_S,
-                             Y_S,
-                             GT_S,
-                             OFF_S } state_t;
+  typedef enum logic [3:0] { 
+    NOTRANSITION_S,
+    R_S,
+    RY_S,
+    G_S,
+    Y_S,
+    GT_S,
+    OFF_S 
+  } state_t;
   
   state_t state, next_state;
 
@@ -79,92 +82,93 @@ module traffic_lights #(
   always_ff @( posedge clk_i )
     begin
       if ( srst_i ) 
-        state <= NOTRANSITION_S;
+        state <= R_S;
       else 
         state <= next_state;
     end
 
   always_comb
-  begin
-    next_state = state;
-    
-    case ( state )
-      R_S: begin
-        if ( cmd_valid_i )
-          next_state = command_parse( cmd_type_i, state );
-        else if ( counter == counter_max )
-          next_state = RY_S;
-      end
+    begin
+      next_state = state;
+      
+      case ( state )
+        R_S: begin
+          if ( cmd_valid_i )
+            next_state = command_parse( cmd_type_i, state );
+          else if ( counter == counter_max )
+            next_state = RY_S;
+        end
 
-      RY_S: begin
-        if ( cmd_valid_i )
-          next_state = command_parse( cmd_type_i, state );
-        else if ( counter == counter_max )
-          next_state = G_S;
-      end
+        RY_S: begin
+          if ( cmd_valid_i )
+            next_state = command_parse( cmd_type_i, state );
+          else if ( counter == counter_max )
+            next_state = G_S;
+        end
 
-      G_S: begin
-        if ( cmd_valid_i )
-          next_state = command_parse( cmd_type_i, state );
-        else if ( counter == counter_max )
-          next_state = GT_S;
-      end
+        G_S: begin
+          if ( cmd_valid_i )
+            next_state = command_parse( cmd_type_i, state );
+          else if ( counter == counter_max )
+            next_state = GT_S;
+        end
 
-      GT_S: begin
-        if ( cmd_valid_i )
-          next_state = command_parse( cmd_type_i, state );
-        else if ( counter == counter_max )
-          next_state = Y_S;
-      end
+        GT_S: begin
+          if ( cmd_valid_i )
+            next_state = command_parse( cmd_type_i, state );
+          else if ( counter == counter_max )
+            next_state = Y_S;
+        end
 
-      Y_S: begin
-        if ( cmd_valid_i )
-          next_state = command_parse( cmd_type_i, state );
-        else if ( counter == counter_max )
-          next_state = R_S;
-      end
+        Y_S: begin
+          if ( cmd_valid_i )
+            next_state = command_parse( cmd_type_i, state );
+          else if ( counter == counter_max )
+            next_state = R_S;
+        end
 
-      NOTRANSITION_S: begin
-        if ( cmd_valid_i )
-          next_state = command_parse( cmd_type_i, state );
-      end
+        NOTRANSITION_S: begin
+          if ( cmd_valid_i )
+            next_state = command_parse( cmd_type_i, state );
+        end
 
-      OFF_S: begin
-        if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(0) )
-          next_state = R_S;
-      end
+        OFF_S: begin
+          if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(0) )
+            next_state = R_S;
+        end
 
-      default: begin
-        next_state = state_t'('x);
-      end
-    endcase
-  end
+        default: begin
+          next_state = state_t'('x);
+        end
+      endcase
+    end
 
   always_ff @( posedge clk_i )
     begin
+      if ( srst_i )
+        green_period <= (PERIOD_SIZE)'(DEFAULT_PERIOD);
       if ( state == NOTRANSITION_S )
         if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(3) )
           green_period <= cmd_data_i;
-      else if ( green_period == '0 )
-        green_period <= (PERIOD_SIZE)'(G_BLINK_CLK_CYCLES); //TODO: resolve default value
+      
     end
 
   always_ff @( posedge clk_i )
     begin
+      if ( srst_i )
+        red_period <= (PERIOD_SIZE)'(DEFAULT_PERIOD);
       if ( state == NOTRANSITION_S )
         if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(4) )
           red_period <= cmd_data_i;
-      else if ( red_period == '0 )
-        red_period <= (PERIOD_SIZE)'(RED_YELLOW_CLK_CYCLES); //TODO: resolve default value
     end
 
   always_ff @( posedge clk_i )
     begin
+      if ( srst_i )
+        yellow_period <= (PERIOD_SIZE)'(DEFAULT_PERIOD);
       if ( state == NOTRANSITION_S )
         if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(5) )
           yellow_period <= cmd_data_i;
-      else if ( yellow_period == '0 )
-        yellow_period <= (PERIOD_SIZE)'(RED_YELLOW_CLK_CYCLES); //TODO: resolve default value
     end
 
   always_ff @( posedge clk_i )
@@ -197,20 +201,20 @@ module traffic_lights #(
 
   always_ff @( posedge clk_i )
     begin
-      if ( state == GT_S && 
-           toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
-        green_toggle = ~green_toggle;
-      else if ( state != GT_S )
-        green_toggle = 1'b0;
+      if ( state != GT_S )
+        green_toggle <= 1'b0;
+      else if ( state == GT_S )
+        if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
+          green_toggle <= ~green_toggle;
     end
 
   always_ff @( posedge clk_i )
     begin
-      if ( state == NOTRANSITION_S && 
-           toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
-        yellow_toggle = ~yellow_toggle;
-      else if ( state != NOTRANSITION_S )
-        yellow_toggle = 1'b0;
+      if ( state != NOTRANSITION_S )
+        yellow_toggle <= 1'b0;
+      else if ( state == NOTRANSITION_S )
+        if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
+          yellow_toggle <= ~yellow_toggle;
     end
 
   always_comb
@@ -227,7 +231,7 @@ module traffic_lights #(
         end
 
         RY_S: begin
-          counter_max = (CTR_SIZE)'(RED_YELLOW_CLK_CYCLES);
+          counter_max         = (CTR_SIZE)'(RED_YELLOW_CLK_CYCLES);
           { red_o, yellow_o } = { 1'b1, 1'b1 };
         end
 
@@ -238,16 +242,16 @@ module traffic_lights #(
 
         GT_S: begin
           counter_max = (CTR_SIZE)'(G_BLINK_CLK_CYCLES);
-          green_o = green_toggle;
+          green_o     = green_toggle;
         end
 
         Y_S: begin
           counter_max = yellow_period;
-          yellow_o = 1'b1;
+          yellow_o    = 1'b1;
         end
 
         NOTRANSITION_S: begin
-          yellow_o = yellow_toggle;
+          yellow_o    = yellow_toggle;
         end
 
         OFF_S: begin
