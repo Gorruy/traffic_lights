@@ -48,9 +48,9 @@ module top_tb;
     end
 
   traffic_lights #(
-    .BLINK_HALF_PERIOD_MS  ( 10          ),
-    .BLINK_GREEN_TIME_TICK ( 2           ),
-    .RED_YELLOW_MS         ( 5           )
+    .BLINK_HALF_PERIOD_MS  ( 1           ),
+    .BLINK_GREEN_TIME_TICK ( 1           ),
+    .RED_YELLOW_MS         ( 1           )
   ) traffic_lights (
     .clk_i                 ( clk         ),
     .srst_i                ( srst        ),

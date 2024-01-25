@@ -17,9 +17,9 @@ module traffic_lights_top (
   logic        cmd_valid;
   logic [15:0] cmd_data;
 
-  logic        red_o;
-  logic        yellow_o;
-  logic        green_o;
+  logic        red;
+  logic        yellow;
+  logic        green;
 
   always_ff @( posedge clk_i )
     begin
@@ -30,11 +30,11 @@ module traffic_lights_top (
       
     end 
 
-  deserializer #(
-    .BLINK_HALF_PREIOD_MS  (10         ),
-    .BLINK_GREEN_TIME_TICK (2          ),
-    .RED_YELLOW_MS         (5          )
-  ) deserializer (
+  traffic_lights #(
+    .BLINK_HALF_PERIOD_MS  ( 1         ),
+    .BLINK_GREEN_TIME_TICK ( 1         ),
+    .RED_YELLOW_MS         ( 1         )
+  ) traffic_lights (
     .clk_i                 ( clk_i     ),
     .srst_i                ( srst      ),
     .cmd_type_i            ( cmd_type  ),

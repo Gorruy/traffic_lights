@@ -146,7 +146,7 @@ module traffic_lights #(
         if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(3) )
           green_period <= cmd_data_i;
       else if ( green_period == '0 )
-        green_period <= (PERIOD_SIZE)'(G_BLINK_CLK_CYCLES);
+        green_period <= (PERIOD_SIZE)'(G_BLINK_CLK_CYCLES); //TODO: resolve default value
     end
 
   always_ff @( posedge clk_i )
@@ -155,7 +155,7 @@ module traffic_lights #(
         if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(4) )
           red_period <= cmd_data_i;
       else if ( red_period == '0 )
-        red_period <= (PERIOD_SIZE)'(RED_YELLOW_CLK_CYCLES);
+        red_period <= (PERIOD_SIZE)'(RED_YELLOW_CLK_CYCLES); //TODO: resolve default value
     end
 
   always_ff @( posedge clk_i )
@@ -164,7 +164,7 @@ module traffic_lights #(
         if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(5) )
           yellow_period <= cmd_data_i;
       else if ( yellow_period == '0 )
-        yellow_period <= (PERIOD_SIZE)'(RED_YELLOW_CLK_CYCLES);
+        yellow_period <= (PERIOD_SIZE)'(RED_YELLOW_CLK_CYCLES); //TODO: resolve default value
     end
 
   always_ff @( posedge clk_i )
@@ -184,10 +184,15 @@ module traffic_lights #(
 
   always_ff @( posedge clk_i )
     begin
-      if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
+      if ( srst_i )
         toggling_counter <= '0;
-      else if ( state == GT_S || state == NOTRANSITION_S )
-        toggling_counter <= toggling_counter + (CTR_SIZE)'(1);
+      else
+        begin
+          if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
+            toggling_counter <= '0;
+          else if ( state == GT_S || state == NOTRANSITION_S )
+            toggling_counter <= toggling_counter + (CTR_SIZE)'(1);
+        end
     end
 
   always_ff @( posedge clk_i )
@@ -195,6 +200,8 @@ module traffic_lights #(
       if ( state == GT_S && 
            toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
         green_toggle = ~green_toggle;
+      else if ( state != GT_S )
+        green_toggle = 1'b0;
     end
 
   always_ff @( posedge clk_i )
@@ -202,13 +209,16 @@ module traffic_lights #(
       if ( state == NOTRANSITION_S && 
            toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
         yellow_toggle = ~yellow_toggle;
+      else if ( state != NOTRANSITION_S )
+        yellow_toggle = 1'b0;
     end
 
   always_comb
     begin
-      red_o    = 1'b0;
-      yellow_o = 1'b0;
-      green_o  = 1'b0;
+      red_o       = 1'b0;
+      yellow_o    = 1'b0;
+      green_o     = 1'b0;
+      counter_max = '0;
 
       case ( state )
         R_S: begin
@@ -217,7 +227,7 @@ module traffic_lights #(
         end
 
         RY_S: begin
-          counter_max = RED_YELLOW_CLK_CYCLES;
+          counter_max = (CTR_SIZE)'(RED_YELLOW_CLK_CYCLES);
           { red_o, yellow_o } = { 1'b1, 1'b1 };
         end
 
@@ -227,7 +237,7 @@ module traffic_lights #(
         end
 
         GT_S: begin
-          counter_max = G_BLINK_CLK_CYCLES;
+          counter_max = (CTR_SIZE)'(G_BLINK_CLK_CYCLES);
           green_o = green_toggle;
         end
 
