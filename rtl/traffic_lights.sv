@@ -211,18 +211,16 @@ module traffic_lights #(
     begin
       if ( state != GT_S )
         green_toggle <= 1'b0;
-      else if ( state == GT_S )
-        if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
-          green_toggle <= ~green_toggle;
+      else if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
+        green_toggle <= ~green_toggle;
     end
 
   always_ff @( posedge clk_i )
     begin
       if ( state != NOTRANSITION_S )
         yellow_toggle <= 1'b0;
-      else if ( state == NOTRANSITION_S )
-        if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
-          yellow_toggle <= ~yellow_toggle;
+      else if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
+        yellow_toggle <= ~yellow_toggle;
     end
 
   always_comb

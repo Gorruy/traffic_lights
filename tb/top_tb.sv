@@ -162,7 +162,7 @@ module top_tb;
         generated_session.red_period            = $urandom_range( 10, 1 );
         generated_session.green_period          = $urandom_range( 10, 1 );
 
-        // some state transitions can be skiped
+        // some state transitions can be skiped to randomize configuration of session
         generated_session.off_time              = $urandom_range( 100, 0 ) * $urandom_range( 1, 0 );
         generated_session.notransition_time     = $urandom_range( 100, 0 ) * $urandom_range( 1, 0 );
         generated_session.normal_time_after_set = $urandom_range( 100, 0 ) * $urandom_range( 1, 0 );
