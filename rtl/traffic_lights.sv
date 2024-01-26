@@ -50,9 +50,9 @@ module traffic_lights #(
   
   state_t state, next_state;
 
-  function state_t command_parse(input logic [CMD_SIZE - 1:0] cmd_type, 
-                                       state_t                current_state 
-                                );
+  function state_t command_type_parse( input logic [CMD_SIZE - 1:0] cmd_type, 
+                                        state_t                current_state 
+                                     );
     state_t next_state;
 
     case ( cmd_type )
@@ -105,42 +105,42 @@ module traffic_lights #(
       case ( state )
         R_S: begin
           if ( cmd_valid_i )
-            next_state = command_parse( cmd_type_i, state );
+            next_state = command_type_parse( cmd_type_i, state );
           else if ( counter == counter_max )
             next_state = RY_S;
         end
 
         RY_S: begin
           if ( cmd_valid_i )
-            next_state = command_parse( cmd_type_i, state );
+            next_state = command_type_parse( cmd_type_i, state );
           else if ( counter == counter_max )
             next_state = G_S;
         end
 
         G_S: begin
           if ( cmd_valid_i )
-            next_state = command_parse( cmd_type_i, state );
+            next_state = command_type_parse( cmd_type_i, state );
           else if ( counter == counter_max )
             next_state = GT_S;
         end
 
         GT_S: begin
           if ( cmd_valid_i )
-            next_state = command_parse( cmd_type_i, state );
+            next_state = command_type_parse( cmd_type_i, state );
           else if ( counter == counter_max )
             next_state = Y_S;
         end
 
         Y_S: begin
           if ( cmd_valid_i )
-            next_state = command_parse( cmd_type_i, state );
+            next_state = command_type_parse( cmd_type_i, state );
           else if ( counter == counter_max )
             next_state = R_S;
         end
 
         NOTRANSITION_S: begin
           if ( cmd_valid_i )
-            next_state = command_parse( cmd_type_i, state );
+            next_state = command_type_parse( cmd_type_i, state );
         end
 
         OFF_S: begin
@@ -158,9 +158,8 @@ module traffic_lights #(
     begin
       if ( srst_i )
         green_period <= (PERIOD_SIZE)'(DEFAULT_PERIOD);
-      if ( state == NOTRANSITION_S )
-        if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(3) )
-          green_period <= cmd_data_i;
+      else if ( state == NOTRANSITION_S && cmd_valid_i && cmd_type_i == (CMD_SIZE)'(3) )
+        green_period <= cmd_data_i;
       
     end
 
@@ -168,18 +167,16 @@ module traffic_lights #(
     begin
       if ( srst_i )
         red_period <= (PERIOD_SIZE)'(DEFAULT_PERIOD);
-      if ( state == NOTRANSITION_S )
-        if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(4) )
-          red_period <= cmd_data_i;
+      else if ( state == NOTRANSITION_S && cmd_valid_i && cmd_type_i == (CMD_SIZE)'(4) )
+        red_period <= cmd_data_i;
     end
 
   always_ff @( posedge clk_i )
     begin
       if ( srst_i )
         yellow_period <= (PERIOD_SIZE)'(DEFAULT_PERIOD);
-      if ( state == NOTRANSITION_S )
-        if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(5) )
-          yellow_period <= cmd_data_i;
+      else if ( state == NOTRANSITION_S && cmd_valid_i && cmd_type_i == (CMD_SIZE)'(5) )
+        yellow_period <= cmd_data_i;
     end
 
   always_ff @( posedge clk_i )
@@ -238,7 +235,7 @@ module traffic_lights #(
       case ( state )
         R_S: begin
           counter_max = red_period;
-          red_o = 1'b1;
+          red_o       = 1'b1;
         end
 
         RY_S: begin
@@ -248,7 +245,7 @@ module traffic_lights #(
 
         G_S: begin
           counter_max = green_period;
-          green_o = 1'b1;
+          green_o     = 1'b1;
         end
 
         GT_S: begin
@@ -262,7 +259,7 @@ module traffic_lights #(
         end
 
         NOTRANSITION_S: begin
-          yellow_o    = yellow_toggle;
+          yellow_o = yellow_toggle;
         end
 
         OFF_S: begin

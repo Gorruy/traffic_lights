@@ -161,6 +161,8 @@ module top_tb;
         generated_session.yellow_period         = $urandom_range( 10, 1 );
         generated_session.red_period            = $urandom_range( 10, 1 );
         generated_session.green_period          = $urandom_range( 10, 1 );
+
+        // some state transitions can be skiped
         generated_session.off_time              = $urandom_range( 100, 0 ) * $urandom_range( 1, 0 );
         generated_session.notransition_time     = $urandom_range( 100, 0 ) * $urandom_range( 1, 0 );
         generated_session.normal_time_after_set = $urandom_range( 100, 0 ) * $urandom_range( 1, 0 );
@@ -173,6 +175,8 @@ module top_tb;
 
   function state_t command_parse( input logic [CMD_SIZE - 1:0] cmd_type_i,
                                         state_t                current_state );
+
+    // This function normal set of states
     state_t next_state;
 
     if ( cmd_type_i === (CMD_SIZE)'(1) )
@@ -194,7 +198,7 @@ module top_tb;
     logic [PERIOD_SIZE - 1:0] red_period;
     logic [PERIOD_SIZE - 1:0] green_period;
     int                       counter;
-    int                       time_out_counter;
+    int                       timeout_counter;
     int                       toggling_counter;
 
     current_state    = R_S;
@@ -229,7 +233,7 @@ module top_tb;
 
         if ( cmd_valid_i === 1'b1 )
           begin
-            time_out_counter <= 0;
+            timeout_counter <= 0;
 
             if ( current_state == NOTRANSITION_S )
               begin
@@ -360,10 +364,10 @@ module top_tb;
               current_state <= command_parse( cmd_type_i, current_state );
           end
 
-        if ( time_out_counter == 101 )
+        if ( timeout_counter == 101 )
           return;
         else 
-         time_out_counter += 1;
+         timeout_counter += 1;
 
       end
 
