@@ -1,7 +1,4 @@
 module traffic_lights #(
-  // This module will collect serial data
-  // of data bus size and put it in parallel
-  // form with first came bit as MSB
   parameter BLINK_HALF_PERIOD_MS  = 10,
   parameter BLINK_GREEN_TIME_TICK = 2,
   parameter RED_YELLOW_MS         = 5

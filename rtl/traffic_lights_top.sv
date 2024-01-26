@@ -34,7 +34,7 @@ module traffic_lights_top (
     .BLINK_HALF_PERIOD_MS  ( 1         ),
     .BLINK_GREEN_TIME_TICK ( 1         ),
     .RED_YELLOW_MS         ( 1         )
-  ) traffic_lights (
+  ) traffic_lights_impl (
     .clk_i                 ( clk_i     ),
     .srst_i                ( srst      ),
     .cmd_type_i            ( cmd_type  ),
