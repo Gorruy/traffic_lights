@@ -1,6 +1,6 @@
 module top_tb;
 
-  parameter NUMBER_OF_TEST_RUNS            = 100;
+  parameter NUMBER_OF_TEST_RUNS            = 10000;
 
   parameter BLINK_HALF_PERIOD_MS           = 10;
   parameter BLINK_GREEN_TIME_TICK          = 2;
@@ -158,9 +158,9 @@ module top_tb;
 
     repeat ( NUMBER_OF_TEST_RUNS )
       begin
-        generated_session.yellow_period         = $urandom_range( 100, 0 );
-        generated_session.red_period            = $urandom_range( 100, 0 );
-        generated_session.green_period          = $urandom_range( 100, 0 );
+        generated_session.yellow_period         = $urandom_range( 10, 1 );
+        generated_session.red_period            = $urandom_range( 10, 1 );
+        generated_session.green_period          = $urandom_range( 10, 1 );
         generated_session.off_time              = $urandom_range( 100, 0 ) * $urandom_range( 1, 0 );
         generated_session.notransition_time     = $urandom_range( 100, 0 ) * $urandom_range( 1, 0 );
         generated_session.normal_time_after_set = $urandom_range( 100, 0 ) * $urandom_range( 1, 0 );
@@ -175,25 +175,15 @@ module top_tb;
                                         state_t                current_state );
     state_t next_state;
 
-    case ( cmd_type_i )
-      (CMD_SIZE)'(0):
-        next_state = R_S;
+    if ( cmd_type_i === (CMD_SIZE)'(1) )
+      next_state = OFF_S;
+    else if ( cmd_type_i === (CMD_SIZE)'(2) )
+      next_state = NOTRANSITION_S;
+    else 
+      next_state = current_state;
 
-      (CMD_SIZE)'(1):
-        next_state = OFF_S;
-
-      (CMD_SIZE)'(2), (CMD_SIZE)'(3), (CMD_SIZE)'(4), (CMD_SIZE)'(5):
-        next_state = NOTRANSITION_S;
-    endcase
-
-    if ( current_state !== NOTRANSITION_S && current_state !== OFF_S &&
-           next_state === R_S )
-      return current_state;
-    else if ( current_state === OFF_S && next_state === NOTRANSITION_S )
-      return OFF_S;
-    else
-      return next_state;
-      
+    return next_state;
+    
   endfunction
 
   task observe_sessions;
@@ -204,6 +194,7 @@ module top_tb;
     logic [PERIOD_SIZE - 1:0] red_period;
     logic [PERIOD_SIZE - 1:0] green_period;
     int                       counter;
+    int                       time_out_counter;
     int                       toggling_counter;
 
     current_state    = R_S;
@@ -219,37 +210,26 @@ module top_tb;
       begin
         @( posedge clk );
 
-        if ( current_state === GT_S )
-          begin
-            if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
-              begin
-                expected_green   <= ~expected_green;
-                toggling_counter <= 0;
-              end
-            else
-              toggling_counter <= toggling_counter + 1;
-          end
-        else
-          expected_green <= 1'b0;
-          
+        if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
+          toggling_counter <= '0;
+        else if ( current_state == NOTRANSITION_S || current_state == GT_S)            
+          toggling_counter <= toggling_counter + 1;
 
-        if ( current_state === NOTRANSITION_S )
-          begin
-            if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
-              begin
-                expected_yellow  <= ~expected_yellow;
-                toggling_counter <= 0;
-              end
-            else
-              toggling_counter <= toggling_counter + 1;
-          end
-        else
+        if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES &&
+             current_state === GT_S )
+          expected_green <= ~expected_green;
+        else if ( current_state !== GT_S )
+          expected_green <= 1'b0;
+
+        if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES &&
+             current_state === NOTRANSITION_S )
+          expected_yellow <= ~expected_yellow;
+        else if ( current_state !== NOTRANSITION_S )
           expected_yellow <= 1'b0;
 
         if ( cmd_valid_i === 1'b1 )
           begin
-            counter       <= 0;
-            current_state <= command_parse( cmd_type_i, current_state );
+            time_out_counter <= 0;
 
             if ( current_state == NOTRANSITION_S )
               begin
@@ -270,6 +250,23 @@ module top_tb;
                 $error( "NOTRANSITION STATE fault: not expected signal values!: g:%b, r:%b, y:%b", green_o, red_o, yellow_o);
                 return;
               end
+
+            if ( cmd_valid_i )
+              begin
+                case ( cmd_type_i )
+                  (CMD_SIZE)'(0):
+                    current_state <= R_S;
+ 
+                  (CMD_SIZE)'(1):
+                    current_state <= OFF_S;
+ 
+                  (CMD_SIZE)'(2), (CMD_SIZE)'(3), (CMD_SIZE)'(4), (CMD_SIZE)'(5):
+                    current_state <= NOTRANSITION_S;
+
+                  default: 
+                    current_state <= state_t'('x);
+                endcase
+              end
           end
 
           R_S: begin
@@ -279,7 +276,7 @@ module top_tb;
                 $error( "Wrong colors during red state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
                 return;
               end
-            if ( counter == red_period && cmd_valid_i !== 1'b1 )
+            if ( counter == red_period )
               begin
                 current_state <= RY_S;
                 counter       <= 0;
@@ -293,7 +290,7 @@ module top_tb;
                 $error( "Wrong colors during red yellow state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
                 return;
               end
-            if ( counter == RED_YELLOW_CLK_CYCLES && cmd_valid_i !== 1'b1 )
+            if ( counter == RED_YELLOW_CLK_CYCLES )
               begin
                 current_state <= G_S;
                 counter       <= 0;
@@ -307,7 +304,7 @@ module top_tb;
                 $error( "Wrong colors during green state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
                 return;
               end
-            if ( counter == green_period && cmd_valid_i !== 1'b1 )
+            if ( counter == green_period )
               begin
                 current_state <= GT_S;
                 counter       <= 0;
@@ -321,7 +318,7 @@ module top_tb;
                 $error( "Wrong colors during green blink state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
                 return;
               end
-            if ( counter == G_BLINK_CLK_CYCLES && cmd_valid_i !== 1'b1 )
+            if ( counter == G_BLINK_CLK_CYCLES )
               begin
                 current_state <= Y_S;
                 counter       <= 0;
@@ -335,7 +332,7 @@ module top_tb;
                 $error( "Wrong colors during yellow state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
                 return;
               end
-            if ( counter == yellow_period && cmd_valid_i !== 1'b1 )
+            if ( counter == yellow_period )
               begin
                 current_state <= R_S;
                 counter       <= 0;
@@ -349,13 +346,24 @@ module top_tb;
                 $error( "Wrong colors during off state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
                 return;
               end
+            if ( cmd_valid_i && cmd_type_i === (CMD_SIZE)'(0) )
+              current_state <= R_S;
           end
         endcase
 
-        if ( counter == 101 )
+        if ( current_state == OFF_S || current_state == NOTRANSITION_S )
+          counter <= '0;
+        else
+          begin 
+            counter = counter + 1;
+            if ( cmd_valid_i && current_state !== OFF_S && current_state !== NOTRANSITION_S )
+              current_state <= command_parse( cmd_type_i, current_state );
+          end
+
+        if ( time_out_counter == 101 )
           return;
         else 
-          counter = counter + 1;
+         time_out_counter += 1;
 
       end
 

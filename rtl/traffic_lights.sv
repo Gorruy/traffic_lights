@@ -57,19 +57,30 @@ module traffic_lights #(
 
     case ( cmd_type )
       (CMD_SIZE)'(0):
-        next_state = R_S;
+        begin
+          if ( current_state == NOTRANSITION_S || current_state == OFF_S )
+            next_state = R_S;
+          else 
+            next_state = current_state;
+        end
 
       (CMD_SIZE)'(1):
-        next_state = OFF_S;
+        begin
+          next_state = OFF_S;
+        end
 
       (CMD_SIZE)'(2):
-        next_state = NOTRANSITION_S;
+        begin
+          next_state = NOTRANSITION_S;
+        end
 
       (CMD_SIZE)'(3), (CMD_SIZE)'(4), (CMD_SIZE)'(5):
-        if ( current_state == NOTRANSITION_S )
-          next_state = NOTRANSITION_S;
-        else
-          next_state = current_state;
+        begin
+          if ( current_state == NOTRANSITION_S )
+            next_state = NOTRANSITION_S;
+          else
+            next_state = current_state;
+        end
 
       default:
         next_state = state_t'('x);
