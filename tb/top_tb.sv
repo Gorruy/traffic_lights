@@ -171,138 +171,157 @@ module top_tb;
 
   endtask
 
-  task observe_sessions ( mailbox #( session_t ) input_sessions );
+  task normal_check( input session_t current_session );
 
-    logic     prev_yellow;
-    logic     prev_green;
-    int       counter;
-    session_t current_session;
-    
-    repeat ( NUMBER_OF_TEST_RUNS )
+    int   counter;
+    logic prev_green;
+
+    repeat ( current_session.red_period )
       begin
-        input_sessions.get( current_session );
-
-        wait ( off.triggered );
-
-        repeat ( OFF_TIME )
+        @( posedge clk );
+        if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b1, 1'b0 } )
           begin
-            @( posedge clk );
-            if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b0, 1'b0 } )
-              begin
-                test_succeed = 1'b0;
-                $error( "Wrong colors during off state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
-                return;
-              end
+            test_succeed = 1'b0;
+            $error( "Wrong colors during red state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+            return;
           end
+      end
 
-        wait ( on.triggered );
-
-        repeat ( current_session.red_period )
+    repeat ( RED_YELLOW_CLK_CYCLES )
+      begin
+        @( posedge clk );
+        if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b1, 1'b1 } )
           begin
-            @( posedge clk );
-            if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b1, 1'b0 } )
-              begin
-                test_succeed = 1'b0;
-                $error( "Wrong colors during red state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
-                return;
-              end
+            test_succeed = 1'b0;
+            $error( "Wrong colors during red yellow state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+            return;
           end
+      end
 
-        repeat ( RED_YELLOW_CLK_CYCLES )
+    repeat ( current_session.green_period )
+      begin
+        @( posedge clk );
+        if ( { green_o, red_o, yellow_o } !== { 1'b1, 1'b0, 1'b0 } )
           begin
-            @( posedge clk );
-            if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b1, 1'b1 } )
-              begin
-                test_succeed = 1'b0;
-                $error( "Wrong colors during red yellow state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
-                return;
-              end
+            test_succeed = 1'b0;
+            $error( "Wrong colors during green state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+            return;
           end
+      end
 
-        repeat ( current_session.green_period )
+    #1;
+    counter    = 0;
+    prev_green = green_o;
+    repeat ( G_BLINK_CLK_CYCLES )
+      begin
+        @( posedge clk );
+        if ( { red_o, yellow_o } !== { 1'b0, 1'b0 } )
           begin
-            @( posedge clk );
-            if ( { green_o, red_o, yellow_o } !== { 1'b1, 1'b0, 1'b0 } )
-              begin
-                test_succeed = 1'b0;
-                $error( "Wrong colors during green state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
-                return;
-              end
+            test_succeed = 1'b0;
+            $error( "Wrong colors during green blink state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+            return;
           end
-
-        #1;
-        counter    = 0;
-        prev_green = green_o;
-        repeat ( G_BLINK_CLK_CYCLES )
+        if ( counter >= G_Y_TOGGLE_HPERIOD_CLK_CYCLES - 1 )
           begin
-            @( posedge clk );
-            if ( { red_o, yellow_o } !== { 1'b0, 1'b0 } )
+            #1;
+            counter = 0;
+            if ( prev_green !== !green_o )
               begin
                 test_succeed = 1'b0;
                 $error( "Wrong colors during green blink state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
                 return;
               end
-            if ( counter >= G_Y_TOGGLE_HPERIOD_CLK_CYCLES - 1 )
+            else 
               begin
-                #1;
-                counter = 0;
-                if ( prev_green !== !green_o )
-                  begin
-                    test_succeed = 1'b0;
-                    $error( "Wrong colors during green blink state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
-                    return;
-                  end
-                else 
-                  begin
-                    prev_green = green_o;
-                    continue;
-                  end
-              end
-            else
-              begin
-                counter += 1;
+                prev_green = green_o;
+                continue;
               end
           end
-
-        repeat ( current_session.yellow_period )
+        else
           begin
-            @( posedge clk );
-            if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b0, 1'b1 } )
+            counter += 1;
+          end
+      end
+
+    repeat ( current_session.yellow_period )
+      begin
+        @( posedge clk );
+        if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b0, 1'b1 } )
+          begin
+            test_succeed = 1'b0;
+            $error( "Wrong colors during yellow state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+            return;
+          end
+      end
+  endtask
+
+  task off_check;
+
+    repeat ( OFF_TIME )
+      begin
+        @( posedge clk );
+        if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b0, 1'b0 } )
+          begin
+            test_succeed = 1'b0;
+            $error( "Wrong colors during off state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+            return;
+          end
+      end
+
+  endtask
+
+  task notransition_check;
+
+    int   counter;
+    logic prev_yellow;
+
+    #1;
+    counter     = 0;
+    prev_yellow = yellow_o;
+    repeat ( NOTRANSITION_TIME - 1 )
+      begin
+        @( posedge clk );
+        if ( counter >= G_Y_TOGGLE_HPERIOD_CLK_CYCLES - 1 )
+          begin
+            counter = 0;
+            if ( { green_o, red_o, prev_yellow } !== { !yellow_o, 1'b0, 1'b0 })
               begin
                 test_succeed = 1'b0;
-                $error( "Wrong colors during yellow state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+                $error( "NOTRANSITION fault: not expected signal values!: g:%b, r:%b, y:%b", green_o, red_o, yellow_o);
                 return;
               end
+            else 
+              begin
+                prev_yellow = yellow_o;
+                continue;
+              end
           end
+        else
+          begin
+            counter += 1;
+          end
+      end
+
+  endtask
+
+  task observe_sessions ( mailbox #( session_t ) input_sessions );
+
+    session_t current_session;
+    
+    repeat ( NUMBER_OF_TEST_RUNS )
+      begin
+
+        input_sessions.get( current_session );
+
+        wait ( off.triggered );
+        off_check();
+
+        wait ( on.triggered );
+        normal_check( current_session );
 
         wait ( notransition.triggered );
+        notransition_check();
 
-        #1;
-        counter     = 0;
-        prev_yellow = yellow_o;
-        repeat ( NOTRANSITION_TIME - 1 )
-          begin
-            @( posedge clk );
-            if ( counter >= G_Y_TOGGLE_HPERIOD_CLK_CYCLES - 1 )
-              begin
-                counter = 0;
-                if ( { green_o, red_o, prev_yellow } !== { !yellow_o, 1'b0, 1'b0 })
-                  begin
-                    test_succeed = 1'b0;
-                    $error( "NOTRANSITION fault: not expected signal values!: g:%b, r:%b, y:%b", green_o, red_o, yellow_o);
-                    return;
-                  end
-                else 
-                  begin
-                    prev_yellow = yellow_o;
-                    continue;
-                  end
-              end
-            else
-              begin
-                counter += 1;
-              end
-          end
       end
   endtask
 
