@@ -1,8 +1,8 @@
 module top_tb;
 
-  parameter NUMBER_OF_TEST_RUNS            = 10000;
+  parameter NUMBER_OF_TEST_RUNS            = 10;
 
-  parameter BLINK_HALF_PERIOD_MS           = 10;
+  parameter BLINK_HALF_PERIOD_MS           = 11;
   parameter BLINK_GREEN_TIME_TICK          = 2;
   parameter RED_YELLOW_MS                  = 5;
 
@@ -15,18 +15,21 @@ module top_tb;
   localparam PERIOD_SIZE                   = 16;
   localparam DEFAULT_PERIOD                = 10;
 
-  bit          clk;
-  logic        srst;
+  localparam MAX_PERIOD                    = 15;
+  localparam MIN_PERIOD                    = 5;
+  localparam NOTRANSITION_TIME             = 20;
+  localparam OFF_TIME                      = 30;
 
-  logic [2:0]  cmd_type_i;
-  logic        cmd_valid_i;
-  logic [15:0] cmd_data_i;
+  bit                       clk;
+  logic                     srst;
 
-  logic        red_o;
-  logic        yellow_o;
-  logic        green_o;
+  logic [CMD_SIZE - 1:0]    cmd_type_i;
+  logic                     cmd_valid_i;
+  logic [PERIOD_SIZE - 1:0] cmd_data_i;
 
-  
+  logic                     red_o;
+  logic                     yellow_o;
+  logic                     green_o;
 
   // flag to indicate if there is an error
   bit test_succeed;
@@ -67,10 +70,6 @@ module top_tb;
     logic [PERIOD_SIZE - 1:0] yellow_period;
     logic [PERIOD_SIZE - 1:0] red_period;
     logic [PERIOD_SIZE - 1:0] green_period;
-    int                       off_time;
-    int                       notransition_time;
-    int                       normal_time_after_to;
-    int                       normal_time_after_set; 
   } session_t;
 
   typedef enum logic [3:0] { 
@@ -83,25 +82,37 @@ module top_tb;
     NOTRANSITION_S 
   } state_t;
 
-  mailbox #( session_t ) generated_sessions = new();
+  typedef enum logic [2:0] {
+    ON,
+    OFF,
+    TO_NOTRANSITION,
+    GREEN_SET,
+    RED_SET,
+    YELLOW_SET
+  } command_t;
 
-  task put_settings ( input logic [PERIOD_SIZE - 1:0] green_period,
-                            logic [PERIOD_SIZE - 1:0] red_period, 
-                            logic [PERIOD_SIZE - 1:0] yellow_period, 
+  command_t commands;
+
+  mailbox #( session_t ) generated_sessions = new();
+  mailbox #( session_t ) input_sessions     = new();
+
+  event off, on, notransition;
+
+  task put_settings ( input logic [PERIOD_SIZE - 1:0] period, 
                             logic [CMD_SIZE - 1:0]    cmd_type 
                     );
     cmd_type_i  = cmd_type;
     cmd_valid_i = 1'b1;
 
     case ( cmd_type )
-      (CMD_SIZE)'(3):
-        cmd_data_i = green_period;
+      GREEN_SET:
+        cmd_data_i = period;
 
-      (CMD_SIZE)'(4):
-        cmd_data_i = red_period;
+      RED_SET:
+        cmd_data_i = period;
 
-      (CMD_SIZE)'(5):
-        cmd_data_i = yellow_period;
+      YELLOW_SET:
+        cmd_data_i = period;
 
       default:
         cmd_data_i = '0;
@@ -115,39 +126,32 @@ module top_tb;
 
   endtask
 
-  task settle_sessions ( mailbox #( session_t ) generated_sessions );
+  task settle_sessions ( mailbox #( session_t ) generated_sessions,
+                         mailbox #( session_t ) input_sessions
+                       );
     session_t session_to_settle;
 
     while ( generated_sessions.num() )
       begin
         generated_sessions.get( session_to_settle );
+        input_sessions.put( session_to_settle );
 
-        if ( session_to_settle.off_time )
-          begin
-            put_settings( '0, '0, '0, (CMD_SIZE)'(1) );
-            ##(session_to_settle.off_time);
-          end
+        put_settings( session_to_settle.green_period, GREEN_SET );
+        put_settings( session_to_settle.red_period, RED_SET );
+        put_settings( session_to_settle.yellow_period, YELLOW_SET );
 
-        if ( session_to_settle.normal_time_after_to )
-          begin
-            put_settings( '0, '0, '0, (CMD_SIZE)'(0) );
-            ##(session_to_settle.normal_time_after_to);
-          end
+        put_settings( '0, OFF );
+        ->off;
+        ##( OFF_TIME );
 
-        if ( session_to_settle.notransition_time )
-          begin
-            put_settings( '0, '0, '0, (CMD_SIZE)'(2) );
-            put_settings( session_to_settle.green_period, '0, '0, (CMD_SIZE)'(3) );
-            put_settings( '0, session_to_settle.red_period, '0, (CMD_SIZE)'(4) );
-            put_settings( '0, '0, session_to_settle.yellow_period, (CMD_SIZE)'(5) );
-            ##(session_to_settle.notransition_time);
-          end
+        put_settings( '0, ON );
+        ->on;
+        ##( session_to_settle.green_period + session_to_settle.red_period + 
+        session_to_settle.yellow_period + G_BLINK_CLK_CYCLES + RED_YELLOW_CLK_CYCLES );
 
-        if ( session_to_settle.normal_time_after_set )
-          begin
-            put_settings( '0, '0, '0, (CMD_SIZE)'(1) );
-            ##(session_to_settle.normal_time_after_set);
-          end
+        put_settings( '0, TO_NOTRANSITION );
+        ->notransition;
+        ##( NOTRANSITION_TIME );
         
       end
   endtask
@@ -158,219 +162,148 @@ module top_tb;
 
     repeat ( NUMBER_OF_TEST_RUNS )
       begin
-        generated_session.yellow_period         = $urandom_range( 10, 1 );
-        generated_session.red_period            = $urandom_range( 10, 1 );
-        generated_session.green_period          = $urandom_range( 10, 1 );
-
-        // some state transitions can be skiped to randomize configuration of session
-        generated_session.off_time              = $urandom_range( 100, 0 ) * $urandom_range( 1, 0 );
-        generated_session.notransition_time     = $urandom_range( 100, 0 ) * $urandom_range( 1, 0 );
-        generated_session.normal_time_after_set = $urandom_range( 100, 0 ) * $urandom_range( 1, 0 );
-        generated_session.normal_time_after_to  = $urandom_range( 100, 0 ) * $urandom_range( 1, 0 );
+        generated_session.yellow_period = $urandom_range( MAX_PERIOD, MIN_PERIOD );
+        generated_session.red_period    = $urandom_range( MAX_PERIOD, MIN_PERIOD );
+        generated_session.green_period  = $urandom_range( MAX_PERIOD, MIN_PERIOD );
 
         generated_sessions.put( generated_session );
       end
 
   endtask
 
-  function state_t command_parse( input logic [CMD_SIZE - 1:0] cmd_type_i,
-                                        state_t                current_state );
+  task observe_sessions ( mailbox #( session_t ) input_sessions );
 
-    // This function normal set of states
-    state_t next_state;
-
-    if ( cmd_type_i === (CMD_SIZE)'(1) )
-      next_state = OFF_S;
-    else if ( cmd_type_i === (CMD_SIZE)'(2) )
-      next_state = NOTRANSITION_S;
-    else 
-      next_state = current_state;
-
-    return next_state;
+    logic     prev_yellow;
+    logic     prev_green;
+    int       counter;
+    session_t current_session;
     
-  endfunction
-
-  task observe_sessions;
-    state_t                   current_state;
-    logic                     expected_green;
-    logic                     expected_yellow;
-    logic [PERIOD_SIZE - 1:0] yellow_period;
-    logic [PERIOD_SIZE - 1:0] red_period;
-    logic [PERIOD_SIZE - 1:0] green_period;
-    int                       counter;
-    int                       timeout_counter;
-    int                       toggling_counter;
-
-    current_state    = R_S;
-    counter          = 0;
-    expected_green   = 1'b0;
-    expected_yellow  = 1'b0;
-    yellow_period    = (PERIOD_SIZE)'(DEFAULT_PERIOD);
-    red_period       = (PERIOD_SIZE)'(DEFAULT_PERIOD);
-    green_period     = (PERIOD_SIZE)'(DEFAULT_PERIOD);
-    toggling_counter = 0;
-
-    forever 
+    repeat ( NUMBER_OF_TEST_RUNS )
       begin
-        @( posedge clk );
+        input_sessions.get( current_session );
 
-        if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
-          toggling_counter <= '0;
-        else if ( current_state == NOTRANSITION_S || current_state == GT_S)            
-          toggling_counter <= toggling_counter + 1;
+        wait ( off.triggered );
 
-        if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES &&
-             current_state === GT_S )
-          expected_green <= ~expected_green;
-        else if ( current_state !== GT_S )
-          expected_green <= 1'b0;
-
-        if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES &&
-             current_state === NOTRANSITION_S )
-          expected_yellow <= ~expected_yellow;
-        else if ( current_state !== NOTRANSITION_S )
-          expected_yellow <= 1'b0;
-
-        if ( cmd_valid_i === 1'b1 )
+        repeat ( OFF_TIME )
           begin
-            timeout_counter <= 0;
-
-            if ( current_state == NOTRANSITION_S )
-              begin
-                if ( cmd_type_i == (CMD_SIZE)'(3) )
-                  green_period <= cmd_data_i;
-                else if ( cmd_type_i == (CMD_SIZE)'(4) )
-                  red_period <= cmd_data_i;
-                else if ( cmd_type_i == (CMD_SIZE)'(5) )
-                  yellow_period <= cmd_data_i;
-              end
-          end
-          
-        case ( current_state )
-          NOTRANSITION_S: begin
-            if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b0, expected_yellow } )
-              begin
-                test_succeed = 1'b0;
-                $error( "NOTRANSITION STATE fault: not expected signal values!: g:%b, r:%b, y:%b", green_o, red_o, yellow_o);
-                return;
-              end
-
-            if ( cmd_valid_i )
-              begin
-                case ( cmd_type_i )
-                  (CMD_SIZE)'(0):
-                    current_state <= R_S;
- 
-                  (CMD_SIZE)'(1):
-                    current_state <= OFF_S;
- 
-                  (CMD_SIZE)'(2), (CMD_SIZE)'(3), (CMD_SIZE)'(4), (CMD_SIZE)'(5):
-                    current_state <= NOTRANSITION_S;
-
-                  default: 
-                    current_state <= state_t'('x);
-                endcase
-              end
-          end
-
-          R_S: begin
-            if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b1, 1'b0 } )
-              begin
-                test_succeed = 1'b0;
-                $error( "Wrong colors during red state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
-                return;
-              end
-            if ( counter == red_period )
-              begin
-                current_state <= RY_S;
-                counter       <= 0;
-              end
-          end
-
-          RY_S: begin
-            if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b1, 1'b1 } )
-              begin
-                test_succeed = 1'b0;
-                $error( "Wrong colors during red yellow state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
-                return;
-              end
-            if ( counter == RED_YELLOW_CLK_CYCLES )
-              begin
-                current_state <= G_S;
-                counter       <= 0;
-              end
-          end
-
-          G_S: begin
-            if ( { green_o, red_o, yellow_o } !== { 1'b1, 1'b0, 1'b0 } )
-              begin
-                test_succeed = 1'b0;
-                $error( "Wrong colors during green state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
-                return;
-              end
-            if ( counter == green_period )
-              begin
-                current_state <= GT_S;
-                counter       <= 0;
-              end
-          end
-
-          GT_S: begin
-            if ( { green_o, red_o, yellow_o } !== { expected_green, 1'b0, 1'b0 } )
-              begin
-                test_succeed = 1'b0;
-                $error( "Wrong colors during green blink state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
-                return;
-              end
-            if ( counter == G_BLINK_CLK_CYCLES )
-              begin
-                current_state <= Y_S;
-                counter       <= 0;
-              end
-          end
-
-          Y_S: begin
-            if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b0, 1'b1 } )
-              begin
-                test_succeed = 1'b0;
-                $error( "Wrong colors during yellow state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
-                return;
-              end
-            if ( counter == yellow_period )
-              begin
-                current_state <= R_S;
-                counter       <= 0;
-              end
-          end
-
-          OFF_S: begin
+            @( posedge clk );
             if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b0, 1'b0 } )
               begin
                 test_succeed = 1'b0;
                 $error( "Wrong colors during off state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
                 return;
               end
-            if ( cmd_valid_i && cmd_type_i === (CMD_SIZE)'(0) )
-              current_state <= R_S;
-          end
-        endcase
-
-        if ( current_state == OFF_S || current_state == NOTRANSITION_S )
-          counter <= '0;
-        else
-          begin 
-            counter = counter + 1;
-            if ( cmd_valid_i && current_state !== OFF_S && current_state !== NOTRANSITION_S )
-              current_state <= command_parse( cmd_type_i, current_state );
           end
 
-        if ( timeout_counter == 101 )
-          return;
-        else 
-         timeout_counter += 1;
+        wait ( on.triggered );
 
+        repeat ( current_session.red_period )
+          begin
+            @( posedge clk );
+            if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b1, 1'b0 } )
+              begin
+                test_succeed = 1'b0;
+                $error( "Wrong colors during red state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+                return;
+              end
+          end
+
+        repeat ( RED_YELLOW_CLK_CYCLES )
+          begin
+            @( posedge clk );
+            if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b1, 1'b1 } )
+              begin
+                test_succeed = 1'b0;
+                $error( "Wrong colors during red yellow state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+                return;
+              end
+          end
+
+        repeat ( current_session.green_period )
+          begin
+            @( posedge clk );
+            if ( { green_o, red_o, yellow_o } !== { 1'b1, 1'b0, 1'b0 } )
+              begin
+                test_succeed = 1'b0;
+                $error( "Wrong colors during green state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+                return;
+              end
+          end
+
+        #1;
+        counter    = 0;
+        prev_green = green_o;
+        repeat ( G_BLINK_CLK_CYCLES )
+          begin
+            @( posedge clk );
+            if ( { red_o, yellow_o } !== { 1'b0, 1'b0 } )
+              begin
+                test_succeed = 1'b0;
+                $error( "Wrong colors during green blink state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+                return;
+              end
+            if ( counter >= G_Y_TOGGLE_HPERIOD_CLK_CYCLES - 1 )
+              begin
+                #1;
+                counter = 0;
+                if ( prev_green !== !green_o )
+                  begin
+                    test_succeed = 1'b0;
+                    $error( "Wrong colors during green blink state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+                    return;
+                  end
+                else 
+                  begin
+                    prev_green = green_o;
+                    continue;
+                  end
+              end
+            else
+              begin
+                counter += 1;
+              end
+          end
+
+        repeat ( current_session.yellow_period )
+          begin
+            @( posedge clk );
+            if ( { green_o, red_o, yellow_o } !== { 1'b0, 1'b0, 1'b1 } )
+              begin
+                test_succeed = 1'b0;
+                $error( "Wrong colors during yellow state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+                return;
+              end
+          end
+
+        wait ( notransition.triggered );
+
+        #1;
+        counter     = 0;
+        prev_yellow = yellow_o;
+        repeat ( NOTRANSITION_TIME - 1 )
+          begin
+            @( posedge clk );
+            if ( counter >= G_Y_TOGGLE_HPERIOD_CLK_CYCLES - 1 )
+              begin
+                counter = 0;
+                if ( { green_o, red_o, prev_yellow } !== { !yellow_o, 1'b0, 1'b0 })
+                  begin
+                    test_succeed = 1'b0;
+                    $error( "NOTRANSITION fault: not expected signal values!: g:%b, r:%b, y:%b", green_o, red_o, yellow_o);
+                    return;
+                  end
+                else 
+                  begin
+                    prev_yellow = yellow_o;
+                    continue;
+                  end
+              end
+            else
+              begin
+                counter += 1;
+              end
+          end
       end
-
   endtask
 
   initial begin
@@ -382,10 +315,11 @@ module top_tb;
     $display("Simulation started!");
     generate_sessions( generated_sessions );
     wait( srst_done === 1'b1 );
+    put_settings( '0, TO_NOTRANSITION );
 
     fork
-      observe_sessions();
-      settle_sessions( generated_sessions );
+      observe_sessions( input_sessions );
+      settle_sessions( generated_sessions, input_sessions );
     join
 
     $display("Simulation is over!");

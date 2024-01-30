@@ -45,15 +45,25 @@ module traffic_lights #(
     OFF_S 
   } state_t;
   
-  state_t state, next_state;
+  typedef enum logic [2:0] {
+    ON,
+    OFF,
+    TO_NOTRANSITION,
+    GREEN_SET,
+    RED_SET,
+    YELLOW_SET
+  } command_t;
+
+  state_t   state, next_state;
+  command_t commands;
 
   function state_t command_type_parse( input logic [CMD_SIZE - 1:0] cmd_type, 
-                                        state_t                current_state 
+                                             state_t                current_state 
                                      );
     state_t next_state;
 
     case ( cmd_type )
-      (CMD_SIZE)'(0):
+      ON:
         begin
           if ( current_state == NOTRANSITION_S || current_state == OFF_S )
             next_state = R_S;
@@ -61,17 +71,17 @@ module traffic_lights #(
             next_state = current_state;
         end
 
-      (CMD_SIZE)'(1):
+      OFF:
         begin
           next_state = OFF_S;
         end
 
-      (CMD_SIZE)'(2):
+      TO_NOTRANSITION:
         begin
           next_state = NOTRANSITION_S;
         end
 
-      (CMD_SIZE)'(3), (CMD_SIZE)'(4), (CMD_SIZE)'(5):
+      GREEN_SET, RED_SET, YELLOW_SET:
         begin
           if ( current_state == NOTRANSITION_S )
             next_state = NOTRANSITION_S;
@@ -103,35 +113,35 @@ module traffic_lights #(
         R_S: begin
           if ( cmd_valid_i )
             next_state = command_type_parse( cmd_type_i, state );
-          else if ( counter == counter_max )
+          else if ( counter == counter_max - 1)
             next_state = RY_S;
         end
 
         RY_S: begin
           if ( cmd_valid_i )
             next_state = command_type_parse( cmd_type_i, state );
-          else if ( counter == counter_max )
+          else if ( counter == counter_max - 1)
             next_state = G_S;
         end
 
         G_S: begin
           if ( cmd_valid_i )
             next_state = command_type_parse( cmd_type_i, state );
-          else if ( counter == counter_max )
+          else if ( counter == counter_max - 1)
             next_state = GT_S;
         end
 
         GT_S: begin
           if ( cmd_valid_i )
             next_state = command_type_parse( cmd_type_i, state );
-          else if ( counter == counter_max )
+          else if ( counter == counter_max - 1)
             next_state = Y_S;
         end
 
         Y_S: begin
           if ( cmd_valid_i )
             next_state = command_type_parse( cmd_type_i, state );
-          else if ( counter == counter_max )
+          else if ( counter == counter_max - 1)
             next_state = R_S;
         end
 
@@ -141,7 +151,7 @@ module traffic_lights #(
         end
 
         OFF_S: begin
-          if ( cmd_valid_i && cmd_type_i == (CMD_SIZE)'(0) )
+          if ( cmd_valid_i && cmd_type_i == ON )
             next_state = R_S;
         end
 
@@ -155,7 +165,7 @@ module traffic_lights #(
     begin
       if ( srst_i )
         green_period <= (PERIOD_SIZE)'(DEFAULT_PERIOD);
-      else if ( state == NOTRANSITION_S && cmd_valid_i && cmd_type_i == (CMD_SIZE)'(3) )
+      else if ( state == NOTRANSITION_S && cmd_valid_i && cmd_type_i == GREEN_SET )
         green_period <= cmd_data_i;
       
     end
@@ -164,7 +174,7 @@ module traffic_lights #(
     begin
       if ( srst_i )
         red_period <= (PERIOD_SIZE)'(DEFAULT_PERIOD);
-      else if ( state == NOTRANSITION_S && cmd_valid_i && cmd_type_i == (CMD_SIZE)'(4) )
+      else if ( state == NOTRANSITION_S && cmd_valid_i && cmd_type_i == RED_SET )
         red_period <= cmd_data_i;
     end
 
@@ -172,7 +182,7 @@ module traffic_lights #(
     begin
       if ( srst_i )
         yellow_period <= (PERIOD_SIZE)'(DEFAULT_PERIOD);
-      else if ( state == NOTRANSITION_S && cmd_valid_i && cmd_type_i == (CMD_SIZE)'(5) )
+      else if ( state == NOTRANSITION_S && cmd_valid_i && cmd_type_i == YELLOW_SET )
         yellow_period <= cmd_data_i;
     end
 
@@ -182,7 +192,7 @@ module traffic_lights #(
         counter <= '0;
       else 
         begin
-          if ( counter == counter_max || 
+          if ( counter == counter_max - 1 || 
                state == OFF_S || state == NOTRANSITION_S )
             counter <= '0;
           else
@@ -197,7 +207,7 @@ module traffic_lights #(
         toggling_counter <= '0;
       else
         begin
-          if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
+          if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES - 1 )
             toggling_counter <= '0;
           else if ( state == GT_S || state == NOTRANSITION_S )
             toggling_counter <= toggling_counter + (CTR_SIZE)'(1);
@@ -208,7 +218,7 @@ module traffic_lights #(
     begin
       if ( state != GT_S )
         green_toggle <= 1'b0;
-      else if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
+      else if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES - 1 )
         green_toggle <= ~green_toggle;
     end
 
@@ -216,7 +226,7 @@ module traffic_lights #(
     begin
       if ( state != NOTRANSITION_S )
         yellow_toggle <= 1'b0;
-      else if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
+      else if ( toggling_counter == G_Y_TOGGLE_HPERIOD_CLK_CYCLES - 1 )
         yellow_toggle <= ~yellow_toggle;
     end
 
