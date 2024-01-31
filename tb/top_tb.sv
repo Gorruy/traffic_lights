@@ -209,38 +209,29 @@ module top_tb;
           end
       end
 
-    #1;
-    counter    = 0;
-    prev_green = green_o;
+    counter = 0;
     repeat ( G_BLINK_CLK_CYCLES )
       begin
         @( posedge clk );
+        if ( counter == 0 )
+          prev_green = green_o;
         if ( { red_o, yellow_o } !== { 1'b0, 1'b0 } )
           begin
             test_succeed = 1'b0;
             $error( "Wrong colors during green blink state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
             return;
           end
-        if ( counter >= G_Y_TOGGLE_HPERIOD_CLK_CYCLES - 1 )
+        if ( counter >= G_Y_TOGGLE_HPERIOD_CLK_CYCLES && green_o == prev_green )
           begin
-            #1;
+            test_succeed = 1'b0;
+            $error( "Wrong colors during green blink state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
+            return;
+          end
+        else if ( counter >= G_Y_TOGGLE_HPERIOD_CLK_CYCLES )
             counter = 0;
-            if ( prev_green !== !green_o )
-              begin
-                test_succeed = 1'b0;
-                $error( "Wrong colors during green blink state: g:%b, r:%b, y:%b", green_o, red_o, yellow_o );
-                return;
-              end
-            else 
-              begin
-                prev_green = green_o;
-                continue;
-              end
-          end
         else
-          begin
             counter += 1;
-          end
+          
       end
 
     repeat ( current_session.yellow_period )
@@ -275,9 +266,7 @@ module top_tb;
     int   counter;
     logic prev_yellow;
 
-    #1;
     counter     = 0;
-    prev_yellow = yellow_o;
     repeat ( NOTRANSITION_TIME - 1 )
       begin
         @( posedge clk );
